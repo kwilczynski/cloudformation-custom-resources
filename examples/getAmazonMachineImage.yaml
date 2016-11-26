@@ -1,0 +1,33 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create an EC2 instance with latest Ubuntu 14.04 image (AMI) available from Canonical.
+Parameters:
+  Name:
+    Type: String
+    Description: Name of the Amazon Machine Image (AMI) to use, including a wildcard match.
+    Default: ubuntu/images/hvm/ubuntu-trusty-14.04-amd64-server-*
+  Owners:
+    Type: String
+    Description: Name or ID of the Amazon AWS account who is the owner of the images.
+    Default: '099720109477' # This needs to be a string explicitly, otherwise it would be parsed as octal value.
+Resources:
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId:
+        !GetAtt getAmazonMachineImage.ImageId
+      InstanceType: t2.micro
+  getAmazonMachineImage:
+    Type: Custom::getAmazonMachineImage
+    Properties:
+      ServiceToken:
+        !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:getAmazonMachineImage
+      Name:
+        !Ref Name
+      Owners:
+        - !Ref Owners
+      Latest: true
+Outputs:
+  ImageId:
+    Value:
+      !GetAtt getAmazonMachineImage.ImageId

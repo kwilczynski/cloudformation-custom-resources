@@ -1,0 +1,75 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a VPC and get details about its subnets and CIDR blocks.
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value:
+            !Sub ${AWS::StackName}-vpc
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        !Ref Vpc
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Type
+        Value: Public
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      Tags:
+      - Key: Type
+        Value: Private
+  getVpcSubnets:
+    DependsOn: # Make sure that the custom resource runs after the VPC is created.
+      - Vpc 
+      - PublicSubnet
+      - PrivateSubnet
+    Type: Custom::getVpcByName
+    Properties:
+      ServiceToken:
+        !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:getVpcByName
+      VpcName:
+        !Sub ${AWS::StackName}-vpc
+  getVpcPublicSubnets:
+    DependsOn: # Make sure that the custom resource runs after the VPC is created.
+      - Vpc 
+      - PublicSubnet
+    Type: Custom::getVpcByName
+    Properties:
+      ServiceToken:
+        !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:getVpcByName
+      VpcName:
+        !Sub ${AWS::StackName}-vpc
+      OnlyPublicSubnets: true
+Outputs:
+  VpcId:
+    Value:
+      !Ref Vpc
+  VpcFirstSubnet:
+    Value:
+      !Select [ 0, !GetAtt getVpcSubnets.Subnets ]
+  VpcFirstCidrBlock:
+    Value:
+      !Select [ 0, !GetAtt getVpcSubnets.CidrBlocks ]
+  VpcSubnets:
+    Value:
+      !Join [ ',', !GetAtt getVpcSubnets.Subnets ]
+  VpcCidrBlocks:
+    Value:
+      !Join [ ',', !GetAtt getVpcSubnets.CidrBlocks ]
+  VpcPublicSubnets:
+    Value:
+      !Join [ ',', !GetAtt getVpcPublicSubnets.Subnets ]
+  VpcPublicCidrBlocks:
+    Value:
+      !Join [ ',', !GetAtt getVpcPublicSubnets.CidrBlocks ]

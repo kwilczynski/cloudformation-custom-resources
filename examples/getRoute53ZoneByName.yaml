@@ -1,0 +1,120 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a public and two private Hosted Zones in Route53, and get details about it.
+Resources:
+  FirstVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value:
+            !Sub ${AWS::StackName}-first-vpc
+  SecondVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value:
+            !Sub ${AWS::StackName}-second-vpc
+  PublicHostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties: 
+      Name:
+        !Sub ${AWS::StackName}.com
+      HostedZoneConfig:
+        Comment:
+          !Sub A public Hosted Zone for ${AWS::StackName}
+  PrivateHostedZoneFirstVpc:
+    DependsOn:
+      - FirstVpc
+    Type: "AWS::Route53::HostedZone"
+    Properties: 
+      Name:
+        !Sub ${AWS::StackName}.com
+      HostedZoneConfig:
+        Comment:
+          !Sub A private Hosted Zone for ${FirstVpc}
+      VPCs:
+        - VPCId:
+            !Ref FirstVpc
+          VPCRegion:
+            !Ref AWS::Region
+  PrivateHostedZoneSecondVpc:
+    DependsOn:
+      - SecondVpc
+    Type: "AWS::Route53::HostedZone"
+    Properties: 
+      Name:
+        !Sub ${AWS::StackName}.com
+      HostedZoneConfig:
+        Comment:
+          !Sub A private Hosted Zone for ${SecondVpc}
+      VPCs:
+        - VPCId:
+            !Ref SecondVpc
+          VPCRegion:
+            !Ref AWS::Region
+      HostedZoneTags:
+        - Key: VpcName
+          Value:
+            !Sub ${AWS::StackName}-second-vpc
+  getPublicRoute53ByName:
+    DependsOn:
+      - FirstVpc
+      - PublicHostedZone
+    Type: Custom::getRoute53ZoneByName
+    Properties:
+      ServiceToken:
+        !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:getRoute53ZoneByName
+      DomainName:
+        !Sub ${AWS::StackName}.com
+      PrivateZone: false
+  getPrivateRoute53ByVpc:
+    DependsOn:
+      - FirstVpc
+      - PrivateHostedZoneFirstVpc
+    Type: Custom::getRoute53ZoneByName
+    Properties:
+      ServiceToken:
+        !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:getRoute53ZoneByName
+      DomainName:
+        !Sub ${AWS::StackName}.com
+      VpcId:
+        !Ref FirstVpc
+  getPrivateRoute53ByTags:
+    DependsOn:
+      - SecondVpc
+      - PrivateHostedZoneSecondVpc
+    Type: Custom::getRoute53ZoneByName
+    Properties:
+      ServiceToken:
+        !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:getRoute53ZoneByName
+      DomainName:
+        !Sub ${AWS::StackName}.com
+      Tags:
+        - Key: VpcName
+          Value:
+            !Sub ${AWS::StackName}-second-vpc
+Outputs:
+  FirstVpcId:
+    Description: The ID of the first VPC.
+    Value:
+      !Ref FirstVpc
+  SecondVpcId:
+    Description: The ID of the second VPC.
+    Value:
+      !Ref SecondVpc
+  PublicHostedZoneIdByName:
+    Description: The Hosted Zone ID acquired by using zone name as filter.
+    Value:
+      !GetAtt getPublicRoute53ByName.Id
+  PrivateHostedZoneIdByVpc:
+    Description: The Hosted Zone ID acquired by using VPC ID as filter.
+    Value:
+      !GetAtt getPrivateRoute53ByVpc.Id
+  PrivateHostedZonesIdByTags:
+    Description: The Hosted Zone ID acquired by using EC2 tags as filter.
+    Value:
+      !GetAtt getPrivateRoute53ByTags.Id
